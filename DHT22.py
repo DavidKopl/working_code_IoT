@@ -10,5 +10,5 @@ while True:
     if vlhkost is not None and teplota is not None:
         print(f"Teplota: {teplota:.1f} C   Vlhkost: {vlhkost:.1f}%")
     else:
-        print("Chyba pri cteni ye senyoru DHT22.")
+        print("Chyba pri cteni ze senzoru DHT22.")
     time.sleep(2)
