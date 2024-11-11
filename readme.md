@@ -30,4 +30,5 @@ def hello_world():
 
 Instalace balicku
  1) activovat venv prostredi activate
+    * z docuemnts/wcIoT/ jit na source venv/bin/activate
  2) pip install nazevbalicku
