@@ -15,7 +15,7 @@ cs = digitalio.DigitalInOut(board.CE0)
 mcp = MCP.MCP3008(spi, cs)
 
 # Vytvoření kanálu (předpokládáme, že je připojen k P7)
-chan = AnalogIn(mcp, MCP.P7)
+chan = AnalogIn(mcp, MCP.P0)
  
 while True:
     print('Raw ADC Value: ', chan.value)
