@@ -16,20 +16,63 @@ ads1115 = ADS1115()
 ec      = DFRobot_EC()
 ph      = DFRobot_PH()
 
+
+# Konstanty
+VREF = 5000    # Referenční napětí v mV
+ADC_RES = 32768  # Rozlišení ADS1115 (16-bit)
+TWO_POINT_CALIBRATION = 0
+READ_TEMP = 25  # Teplota vody v °C
+
+# Kalibrační hodnoty
+CAL1_V = 195  # mv
+CAL1_T = 25   # ℃
+CAL2_V = 1300 # mv
+CAL2_T = 15   # ℃
+
+DO_Table = [
+    14460, 14220, 13820, 13440, 13090, 12740, 12420, 12110, 11810, 11530,
+    11260, 11010, 10770, 10530, 10300, 10080, 9860, 9660, 9460, 9270,
+    9080, 8900, 8730, 8570, 8410, 8250, 8110, 7960, 7820, 7690,
+    7560, 7430, 7300, 7180, 7070, 6950, 6840, 6730, 6630, 6530, 6410
+]
+
+def read_do(voltage_mv, temperature_c):
+    if TWO_POINT_CALIBRATION == 0:
+        v_saturation = CAL1_V + 35 * temperature_c - CAL1_T * 35
+        return (voltage_mv * DO_Table[temperature_c] // v_saturation)
+    else:
+        v_saturation = ((temperature_c - CAL2_T) * (CAL1_V - CAL2_V) // (CAL1_T - CAL2_T)) + CAL2_V
+        return (voltage_mv * DO_Table[temperature_c] // v_saturation)
+
 ec.begin()
 ph.begin()
-while True :
-	#Read your temperature sensor to execute temperature compensation
-	temperature = 25
-	#Set the IIC address
-	ads1115.setAddr_ADS1115(0x48)
-	#Sets the gain and input voltage range.
-	ads1115.setGain(ADS1115_REG_CONFIG_PGA_6_144V)
-	#Get the Digital Value of Analog of selected channel
-	adc0 = ads1115.readVoltage(0)
-	adc1 = ads1115.readVoltage(1)
-	#Convert voltage to EC with temperature compensation
-	EC = ec.readEC(adc0['r'],temperature)
-	PH = ph.readPH(adc1['r'],temperature)
-	print("Temperature:%.1f ^C EC:%.2f ms/cm PH:%.2f " %(temperature,EC,PH))
-	time.sleep(1.0)
+
+while True:
+    # Přečtěte teplotu (předpokládáme 25°C)
+    temperature = 25
+    
+    # Nastavte zesílení a napětí
+    ads1115.setGain(ADS1115_REG_CONFIG_PGA_6_144V)
+    
+    # Čtěte hodnoty z kanálů
+    adc0 = ads1115.readVoltage(0)['r']  # Předpokládaný přístup k hodnotě
+    adc1 = ads1115.readVoltage(1)['r']
+    adc3 = ads1115.readVoltage(3)['r']
+    
+    # Konverze napětí na DO s teplotní kompenzací
+    voltage_mv = VREF * adc3 // ADC_RES
+    
+    # Výpočet DO
+    do_value = read_do(voltage_mv, temperature)
+
+    # Čtěte EC a pH
+    EC = ec.readEC(adc0, temperature)
+    PH = ph.readPH(adc1, temperature)
+     
+    # Výstupní informace
+    print(f"Temperature: {temperature:.1f} °C EC: {EC:.2f} ms/cm PH: {PH:.2f}")
+    print(f"ADC readings: adc3={adc3} adc1={adc1} adc0={adc0}")
+    print("Voltage (mv): ", adc3 * 5000 / 32768)
+    print(f"DO: {do_value} mg/L")
+    
+    time.sleep(1)
