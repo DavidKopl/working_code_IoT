@@ -2,7 +2,7 @@ import sys
 sys.path.append('/home/davidkopl/Documents/working_code_IoT/Python')
 import time
 import mh_z19
-
+import Adafruit_DHT
 
 ADS1115_REG_CONFIG_PGA_6_144V        = 0x00 # 6.144V range = Gain 2/3
 ADS1115_REG_CONFIG_PGA_4_096V        = 0x02 # 4.096V range = Gain 1
@@ -15,9 +15,12 @@ from DFRobot_ADS1115 import ADS1115
 from DFRobot_EC      import DFRobot_EC
 from DFRobot_PH      import DFRobot_PH
 
+
 ads1115 = ADS1115()
 ec      = DFRobot_EC()
 ph      = DFRobot_PH()
+DHT_SENSOR = Adafruit_DHT.DHT22
+
 
 
 # Konstanty
@@ -25,6 +28,7 @@ VREF = 5000    # Referenční napětí v mV
 ADC_RES = 32768  # Rozlišení ADS1115 (16-bit)
 TWO_POINT_CALIBRATION = 0
 READ_TEMP = 25  # Teplota vody v °C
+DHT_PIN = 4
 
 # Kalibrační hodnoty
 CAL1_V = 195  # mv
@@ -52,6 +56,8 @@ ph.begin()
 
 while True:
     # Přečtěte teplotu (předpokládáme 25°C)
+    
+    humidity, temperature = Adafruit_DHT.read(DHT_SENSOR, DHT_PIN)
     temperature = 25
     co2_value = mh_z19.read_from_pwm()
     
@@ -77,7 +83,11 @@ while True:
     print(f"Temperature: {temperature:.1f} °C EC: {EC:.2f} ms/cm PH: {PH:.2f}")
     print(f"ADC readings: adc3={adc3} adc1={adc1} adc0={adc0}")
     print("Voltage (mv): ", adc3 * 5000 / 32768)
-    print(f"CO2 Value: {co2_value} ppm")
+    print(f"CO2 Value: {co2_value} ppm")    
+    if humidity is not None and temperature is not None:
+        print(f"Teplota: {temperature:.1f} °C   Vlhkost: {humidity:.1f} %")
+    else:
+        print("Chyba pri cteni ze senzoru DHT22.")
     print(f"DO: {do_value} mg/L")
     
-    time.sleep(1)
+    time.sleep(2)
