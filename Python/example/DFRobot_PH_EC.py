@@ -1,6 +1,9 @@
 import sys
 sys.path.append('/home/davidkopl/Documents/working_code_IoT/Python')
 import time
+import mh_z19
+
+
 ADS1115_REG_CONFIG_PGA_6_144V        = 0x00 # 6.144V range = Gain 2/3
 ADS1115_REG_CONFIG_PGA_4_096V        = 0x02 # 4.096V range = Gain 1
 ADS1115_REG_CONFIG_PGA_2_048V        = 0x04 # 2.048V range = Gain 2 (default)
@@ -50,6 +53,7 @@ ph.begin()
 while True:
     # Přečtěte teplotu (předpokládáme 25°C)
     temperature = 25
+    co2_value = mh_z19.read_from_pwm()
     
     # Nastavte zesílení a napětí
     ads1115.setGain(ADS1115_REG_CONFIG_PGA_6_144V)
@@ -73,6 +77,7 @@ while True:
     print(f"Temperature: {temperature:.1f} °C EC: {EC:.2f} ms/cm PH: {PH:.2f}")
     print(f"ADC readings: adc3={adc3} adc1={adc1} adc0={adc0}")
     print("Voltage (mv): ", adc3 * 5000 / 32768)
+    print(f"CO2 Value: {co2_value} ppm")
     print(f"DO: {do_value} mg/L")
     
     time.sleep(1)
