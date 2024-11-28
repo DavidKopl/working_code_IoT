@@ -65,16 +65,12 @@ while True:
     adc0 = ads1115.readVoltage(0)['r']
     adc1 = ads1115.readVoltage(1)['r']
     adc2 = ads1115.readVoltage(2)['r']
-
     voltage_mv = VREF * adc2 // ADC_RES
-
-    # Výpočet DO
-    
 
     # Zjištění funkčnosti EC a PH senzorů
     EC, PH , do_value = None, None, None
     if adc0 > THRESHOLD:
-        EC = ec.readEC(adc0, temperature)
+        EC = ec.readEC(adc0, temperature if temperature else 25)
     else:
         print("EC senzor nepripojen")
 
