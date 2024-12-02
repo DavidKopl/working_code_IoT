@@ -1,2 +1,1 @@
-
-    except KeyboardInterrupt:
+1

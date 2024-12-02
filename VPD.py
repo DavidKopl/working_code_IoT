@@ -1,13 +1,12 @@
 import math
 
-
 def calculate_svp(temp_c):
     # Výpočet SVP (nasycený tlak vodní páry)
     return 0.6108 * math.exp((17.27 * temp_c) / (temp_c + 237.3))
 
 def calculate_vpd(temp_c, rh):
     # Výpočet SVP
-    svp = 0.6108 * math.exp((17.27 * temp_c) / (temp_c + 237.3))
+    svp = calculate_svp(temp_c)
     # Výpočet VPD
     vpd = svp * (1 - rh / 100)
     return round(vpd,2)
@@ -20,9 +19,17 @@ def calculate_leaf_vpd(air_temp_c, leaf_temp_c, rh):
     leaf_vpd = svp_leaf - (svp_air * (rh / 100))
     return round(leaf_vpd, 2)
 
+def calculate_rh_for_leaf_vpd(air_temp_c, target_vpd, leaf_temp_c):
+    # SVP pro vzduch a list
+    svp_air = calculate_svp(air_temp_c)
+    svp_leaf = calculate_svp(leaf_temp_c)
+    # Výpočet RH pro požadované leaf VPD
+    rh = (svp_leaf - target_vpd) / svp_air * 100
+    return round(rh, 2)
+
 def calculate_rh_for_vpd(temp_c, target_vpd, leaf_temp_c):
     # Výpočet SVP
-    svp = 0.6108 * math.exp((17.27 * temp_c) / (temp_c + 237.3))
+    # svp = 0.6108 * math.exp((17.27 * temp_c) / (temp_c + 237.3))
 
     svp_leaf = calculate_svp(leaf_temp_c)
     # Výpočet RH na základě požadovaného VPD
@@ -30,15 +37,14 @@ def calculate_rh_for_vpd(temp_c, target_vpd, leaf_temp_c):
     return round(rh, 2)
 
 # Testovací hodnoty
-temperature = 15.0
-  # °C
-humidity = 71 # %
+temperature = 25.0 # °C
+humidity = 50.81 # %
 target_vpd = 1.2  # kPa
 
 # Výpočet požadované vlhkosti
-rh_for_vpd_optimum = calculate_rh_for_vpd(temperature, target_vpd,temperature-2)
-rh_for_vpd_min = calculate_rh_for_vpd(temperature, target_vpd+0.2,temperature-2)
-rh_for_vpd_max = calculate_rh_for_vpd(temperature, target_vpd-0.2,temperature-2)
+rh_for_vpd_optimum = calculate_rh_for_leaf_vpd(temperature, target_vpd,temperature-2)
+rh_for_vpd_min = calculate_rh_for_leaf_vpd(temperature, target_vpd+0.2,temperature-2)
+rh_for_vpd_max = calculate_rh_for_leaf_vpd(temperature, target_vpd-0.2,temperature-2)
 current_vpd = calculate_vpd(temperature, humidity)
 leaf_vpd = calculate_leaf_vpd(temperature, temperature-2, humidity)
 print("Clone: 0.6-1.0 kPa, Vegetace: 1.0-1.2 kPa, Rostlina: 1.2-1.5 kPa")
