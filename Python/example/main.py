@@ -1,5 +1,6 @@
 from collections import deque
 import sys
+import RPi.GPIO as GPIO
 import time
 import requests
 import json
@@ -23,6 +24,8 @@ TWO_POINT_CALIBRATION = 0
 DHT_SENSOR = Adafruit_DHT.DHT22
 DHT_PIN = 4
 THRESHOLD = 10
+# relay_pins = [17, 27, 22, 10]  # GPIO čísla (přizpůsobte podle zapojení)
+relay_pins = [10,17,27,22] 
 SERVER_URL = "http://192.168.0.69:3000/data"
 
 # Výchozí hodnoty (první iterace)
@@ -32,9 +35,6 @@ temp_hum_err = False
 EC_err = False
 Ph_err = False
 DO_err = False
-
-# Fronta pro klouzavý průměr CO2 - 5 hodnot
-co2_values = deque(maxlen=5)
 
 # Kalibrace DO
 CAL1_V = 195
@@ -47,13 +47,30 @@ DO_Table = [
     9080, 8900, 8730, 8570, 8410, 8250, 8110, 7960, 7820, 7690,
     7560, 7430, 7300, 7180, 7070, 6950, 6840, 6730, 6630, 6530, 6410
 ]
-
+def relay_setup():
+    GPIO.setmode(GPIO.BCM)  # Použití číslování GPIO pinů
+    GPIO.setwarnings(False)  # Vypnutí varování
+    # Nastavení pinů jako výstupy
+    for pin in relay_pins:
+        GPIO.setup(pin, GPIO.OUT)
+        GPIO.output(pin, GPIO.HIGH)  # Relé vypnuto (závisí na typu relé)
 # Inicializace
 ads1115 = ADS1115()
 ec = DFRobot_EC()
 ph = DFRobot_PH()
 ec.begin()
 ph.begin()
+relay_setup()
+
+def relay_on(pin):
+    GPIO.output(pin, GPIO.LOW)  # Zapnutí relé (LOW u aktivního LOW relé)
+
+def relay_off(pin):
+    GPIO.output(pin, GPIO.HIGH)  # Vypnutí relé (HIGH u aktivního LOW relé)
+
+# def cleanup():
+#     GPIO.cleanup()  # Reset GPIO pinů do výchozího stavu
+
 
 def read_do(voltage_mv, temperature_c):
     temperature_index = int(temperature_c)
@@ -123,23 +140,50 @@ while True:
         DO_err = False
 
     try:
-        co2_value = mh_z19.read_from_pwm()
+        co2_data = mh_z19.read_from_pwm()
+        co2_value = co2_data.get("co2", None)
     except Exception as e:
         print(f"CO2 read failed: {e}")
         co2_value = {"co2": None}
     # Sestavení dat pro odeslání
 
+ # Logika pro zapnutí/vypnutí relé
+    if co2_value is not None and co2_value <= 600:
+        relay_on(relay_pins[3])  # Zapnout 1. relé in2
+    else:
+        relay_off(relay_pins[3])  # Vypnout 1. relé
+
+    if last_temperature < 15:
+        relay_on(relay_pins[2])  # Zapnout 2. relé in3
+    else:
+        relay_off(relay_pins[2])  # Vypnout 2. relé
+
+    if last_temperature > 30:
+        relay_on(relay_pins[1])  # Zapnout 3. relé in4
+    else:
+        relay_off(relay_pins[1])  # Vypnout 3. relé
+
+    if last_humidity >= 90:
+        relay_on(relay_pins[0])  # Zapnout 4. relé in1
+    else:
+        relay_off(relay_pins[0])  # Vypnout 4. relé
 
     # Sestavení dat pro odeslání
     data = {
         "sensor_id": "device_1",
         "temperature": round(last_temperature,2),
         "humidity": round(last_humidity,2),
-        "co2": co2_value.get("co2") if co2_value else None, 
+        "co2": co2_value if co2_value else None, 
         "ec": EC,
         "ph": PH,
         "do": do_value,
         "adc_readings": {"adc0": adc0, "adc1": adc1, "adc2": adc2},
+        "relays": {
+            "relay1_hum_minus": GPIO.input(relay_pins[0]) == GPIO.LOW,
+            "relay2_temp_minus": GPIO.input(relay_pins[1]) == GPIO.LOW,
+            "relay3_temp_plus": GPIO.input(relay_pins[2]) == GPIO.LOW,
+            "relay4_co2_plus": GPIO.input(relay_pins[3]) == GPIO.LOW,
+        },
         "errors": {"temp_hum_err":temp_hum_err, "EC_error": EC_err, "Ph_error": Ph_err, "DO_error":DO_err}
     }
 
