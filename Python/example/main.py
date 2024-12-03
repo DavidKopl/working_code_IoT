@@ -148,25 +148,25 @@ while True:
     # Sestavení dat pro odeslání
 
  # Logika pro zapnutí/vypnutí relé
-    if co2_value is not None and co2_value <= 600:
-        relay_on(relay_pins[3])  # Zapnout 1. relé in2
-    else:
-        relay_off(relay_pins[3])  # Vypnout 1. relé
-
-    if last_temperature < 15:
-        relay_on(relay_pins[2])  # Zapnout 2. relé in3
-    else:
-        relay_off(relay_pins[2])  # Vypnout 2. relé
+    if last_humidity >= 90:
+        relay_on(relay_pins[0])
+    elif(last_humidity <= 90 - 10):
+        relay_off(relay_pins[0]) 
 
     if last_temperature > 30:
-        relay_on(relay_pins[1])  # Zapnout 3. relé in4
-    else:
-        relay_off(relay_pins[1])  # Vypnout 3. relé
+        relay_on(relay_pins[1])  
+    elif(last_temperature <= 30 - 5):
+        relay_off(relay_pins[1])  
 
-    if last_humidity >= 90:
-        relay_on(relay_pins[0])  # Zapnout 4. relé in1
-    else:
-        relay_off(relay_pins[0])  # Vypnout 4. relé
+    if last_temperature < 15:
+        relay_on(relay_pins[2])
+    elif(last_temperature <= 15 + 5):
+        relay_off(relay_pins[2]) 
+
+    if co2_value is not None and co2_value <= 600:
+        relay_on(relay_pins[3]) 
+    elif(co2_value <= 600 + 200):
+        relay_off(relay_pins[3])  
 
     # Sestavení dat pro odeslání
     data = {
