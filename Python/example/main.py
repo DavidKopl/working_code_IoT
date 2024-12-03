@@ -29,6 +29,10 @@ SERVER_URL = "http://192.168.0.69:3000/data"
 last_temperature = 25.0  # Výchozí teplota, např. pokojová teplota
 last_humidity = 50.0     # Výchozí vlhkost, např. typická hodnota
 temp_hum_err = False
+EC_err = False
+Ph_err = False
+DO_err = False
+
 # Fronta pro klouzavý průměr CO2 - 5 hodnot
 co2_values = deque(maxlen=5)
 
@@ -74,8 +78,6 @@ while True:
     else: 
         temp_hum_err = True
 
-    co2_value = mh_z19.read_from_pwm()
-
     try:
         # Nastavení zisku a čtení hodnoty z ADS1115
         ads1115.setGain(ADS1115_REG_CONFIG_PGA_6_144V)
@@ -93,34 +95,40 @@ while True:
     EC, PH, do_value = None, None, None
     if adc0 and adc0 > THRESHOLD:
         EC = ec.readEC(adc0, last_temperature if last_temperature else 25)
-    else:
+        EC_err = False
+    elif(adc0 == None):
         print("EC senzor nepripojen nebo chyba ADC")
+        EC_err = False
+    else:
+        EC_err = True
 
     if adc1 and (2800 > adc1 > 600):
         PH = ph.readPH(adc1, last_temperature)
-    else:
+        Ph_err = False
+    elif(adc1 == None):
         print("PH senzor nepripojen nebo chyba ADC")
+        Ph_err = False
+    else:
+        Ph_err = True
 
     if adc2 and adc2 > THRESHOLD:
         try:
             do_value = read_do(voltage_mv, last_temperature if last_temperature else 25)
+            DO_err = False
         except ValueError as ve:
             print(f"Chyba při výpočtu DO: {ve}")
+            DO_err = True
     else:
         print("DO senzor nepripojen nebo chyba ADC")
+        DO_err = False
 
-   # Čtení CO2 a klouzavý průměr
     try:
-        co2_reading = mh_z19.read_from_pwm()
-        if co2_reading and "co2" in co2_reading:
-            co2_values.append(co2_reading["co2"])
-        else:
-            print("Neplatná hodnota CO2, použita poslední platná hodnota.")
+        co2_value = mh_z19.read_from_pwm()
     except Exception as e:
         print(f"CO2 read failed: {e}")
+        co2_value = {"co2": None}
+    # Sestavení dat pro odeslání
 
-    # Výpočet klouzavého průměru
-    co2_avg = sum(co2_values) / len(co2_values) if co2_values else None
 
     # Sestavení dat pro odeslání
     data = {
@@ -128,20 +136,20 @@ while True:
         "temperature": round(last_temperature,2),
         "humidity": round(last_humidity,2),
         "co2": co2_value.get("co2") if co2_value else None, 
-        "co2_average": round(co2_avg,2),
         "ec": EC,
         "ph": PH,
         "do": do_value,
         "adc_readings": {"adc0": adc0, "adc1": adc1, "adc2": adc2},
-        "tamp_hum_err": temp_hum_err
+        "errors": {"temp_hum_err":temp_hum_err, "EC_error": EC_err, "Ph_error": Ph_err, "DO_error":DO_err}
     }
 
     # Odeslání dat na server
     headers = {"Content-Type": "application/json"}
     try:
         response = requests.post(SERVER_URL, data=json.dumps(data), headers=headers)
-        print(f"Server responded with status: {response.status_code}")
-        print(response.text)
+        print(f"Server responded with status: \033[32m{response.status_code}\033[0m")
+        print(f"\033[32m{response.text}\033[0m")
+
     except Exception as e:
         print(f"Failed to send data: {e}")
 
