@@ -160,12 +160,12 @@ while True:
 
     if last_temperature < 15:
         relay_on(relay_pins[2])
-    elif(last_temperature <= 15 + 5):
+    elif(last_temperature >= 15 + 5):
         relay_off(relay_pins[2]) 
 
     if co2_value is not None and co2_value <= 600:
         relay_on(relay_pins[3]) 
-    elif(co2_value <= 600 + 200):
+    elif(co2_value >= 600 + 200):
         relay_off(relay_pins[3])  
 
     # Sestavení dat pro odeslání
