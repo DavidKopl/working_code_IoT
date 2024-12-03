@@ -25,7 +25,7 @@ DHT_PIN = 4
 THRESHOLD = 10
 # relay_pins = [17, 27, 22, 10]  # GPIO čísla (přizpůsobte podle zapojení)
 relay_pins = [10,17,27,22] 
-SERVER_URL = "http://192.168.0.69:3000/data"
+SERVER_URL = "http://192.168.0.69:3000"
 
 # Výchozí hodnoty (první iterace)
 last_temperature = 25.0  # Výchozí teplota, např. pokojová teplota
@@ -70,7 +70,25 @@ def relay_off(pin):
 
 # def cleanup():
 #     GPIO.cleanup()  # Reset GPIO pinů do výchozího stavu
-
+def fetch_config(server_url):
+    try:
+        response = requests.get(f"{server_url}/config")
+        response.raise_for_status()
+        config = response.json()
+        print("Config fetched:", config)
+        return config
+    except Exception as e:
+        print(f"Failed to fetch config: {e}")
+        return None
+    
+config = fetch_config(SERVER_URL)
+target_vpd = config.get("target_vpd", 1.2) if config else 1.2
+co2_min = config.get("co2_min", 600) if config else 600
+co2_max = config.get("co2_max", 800) if config else 800
+temp_min = config.get("temp_min", 15) if config else 15
+temp_max = config.get("temp_max", 30) if config else 30
+humidity_min = config.get("humidity_min", 50) if config else 50
+humidity_max = config.get("humidity_max", 90) if config else 90
 
 def read_do(voltage_mv, temperature_c):
     temperature_index = int(temperature_c)
@@ -84,7 +102,23 @@ def read_do(voltage_mv, temperature_c):
         v_saturation = ((temperature_c - CAL2_T) * (CAL1_V - CAL2_V) // (CAL1_T - CAL2_T)) + CAL2_V
         return (voltage_mv * DO_Table[temperature_index] // v_saturation)
 
+last_config_update = time.time()  # Čas posledního načtení konfigurace
+
 while True:
+    current_time = time.time()
+    print(last_config_update, " - ",current_time, " = ",current_time-last_config_update)
+    # Každou minutu načíst konfiguraci
+    if current_time - last_config_update >= 60:
+        config = fetch_config(SERVER_URL)
+        if config:
+            target_vpd = config.get("target_vpd", target_vpd)
+            co2_min = config.get("co2_min", co2_min)
+            co2_max = config.get("co2_max", co2_max)
+            temp_min = config.get("temp_min", temp_min)
+            temp_max = config.get("temp_max", temp_max)
+            humidity_min = config.get("humidity_min", humidity_min)
+            humidity_max = config.get("humidity_max", humidity_max)
+        last_config_update = current_time
     humidity, temperature = Adafruit_DHT.read(DHT_SENSOR, DHT_PIN)
     
     # Aktualizace posledních známých hodnot, pokud jsou data platná + info o erroru.
@@ -113,16 +147,16 @@ while True:
     if adc0 and adc0 > THRESHOLD:
         EC = ec.readEC(adc0, last_temperature if last_temperature else 25)
         EC_err = False
-    elif(adc0 == None):
+    elif(adc0 == None or adc0 < 5):
         print("EC senzor nepripojen nebo chyba ADC")
         EC_err = False
     else:
         EC_err = True
 
-    if adc1 and (2800 > adc1 > 600):
+    if adc1 and (2200 > adc1 > 600):
         PH = ph.readPH(adc1, last_temperature)
         Ph_err = False
-    elif(adc1 == None):
+    elif(adc1 == None or adc1 >2700):
         print("PH senzor nepripojen nebo chyba ADC")
         Ph_err = False
     else:
@@ -185,13 +219,14 @@ while True:
             "relay3_temp_plus": GPIO.input(relay_pins[2]) == GPIO.LOW,
             "relay4_co2_plus": GPIO.input(relay_pins[3]) == GPIO.LOW,
         },
+        
         "errors": {"temp_hum_err":temp_hum_err, "EC_error": EC_err, "Ph_error": Ph_err, "DO_error":DO_err}
     }
 
     # Odeslání dat na server
     headers = {"Content-Type": "application/json"}
     try:
-        response = requests.post(SERVER_URL, data=json.dumps(data), headers=headers)
+        response = requests.post(f"{SERVER_URL}/data", data=json.dumps(data), headers=headers)
         print(f"Server responded with status: \033[32m{response.status_code}\033[0m")
         print(f"\033[32m{response.text}\033[0m")
 
