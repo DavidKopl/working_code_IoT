@@ -28,6 +28,7 @@ SERVER_URL = "http://192.168.0.69:3000/data"
 # Výchozí hodnoty (první iterace)
 last_temperature = 25.0  # Výchozí teplota, např. pokojová teplota
 last_humidity = 50.0     # Výchozí vlhkost, např. typická hodnota
+temp_hum_err = False
 # Fronta pro klouzavý průměr CO2 - 5 hodnot
 co2_values = deque(maxlen=5)
 
@@ -65,13 +66,13 @@ def read_do(voltage_mv, temperature_c):
 while True:
     humidity, temperature = Adafruit_DHT.read(DHT_SENSOR, DHT_PIN)
     
-    # Aktualizace posledních známých hodnot, pokud jsou data platná
-    if temperature is not None:
+    # Aktualizace posledních známých hodnot, pokud jsou data platná + info o erroru.
+    if temperature and humidity is not None:
         last_temperature = temperature
-    else: 
-        print("Temp and hum error reading!")
-    if humidity is not None:
         last_humidity = humidity
+        temp_hum_err = False
+    else: 
+        temp_hum_err = True
 
     co2_value = mh_z19.read_from_pwm()
 
@@ -108,21 +109,31 @@ while True:
     else:
         print("DO senzor nepripojen nebo chyba ADC")
 
+   # Čtení CO2 a klouzavý průměr
     try:
-        co2_value = mh_z19.read_from_pwm()
+        co2_reading = mh_z19.read_from_pwm()
+        if co2_reading and "co2" in co2_reading:
+            co2_values.append(co2_reading["co2"])
+        else:
+            print("Neplatná hodnota CO2, použita poslední platná hodnota.")
     except Exception as e:
         print(f"CO2 read failed: {e}")
-        co2_value = {"co2": None}
+
+    # Výpočet klouzavého průměru
+    co2_avg = sum(co2_values) / len(co2_values) if co2_values else None
+
     # Sestavení dat pro odeslání
     data = {
         "sensor_id": "device_1",
         "temperature": round(last_temperature,2),
         "humidity": round(last_humidity,2),
         "co2": co2_value.get("co2") if co2_value else None, 
+        "co2_average": round(co2_avg,2),
         "ec": EC,
         "ph": PH,
         "do": do_value,
-        "adc_readings": {"adc0": adc0, "adc1": adc1, "adc2": adc2}
+        "adc_readings": {"adc0": adc0, "adc1": adc1, "adc2": adc2},
+        "tamp_hum_err": temp_hum_err
     }
 
     # Odeslání dat na server
