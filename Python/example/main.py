@@ -7,7 +7,6 @@ import json
 import mh_z19
 import Adafruit_DHT
 sys.path.append('/home/davidkopl/Documents/working_code_IoT/Python')
-
 from DFRobot_ADS1115 import ADS1115
 from DFRobot_EC      import DFRobot_EC
 from DFRobot_PH      import DFRobot_PH
@@ -35,6 +34,7 @@ temp_hum_err = False
 EC_err = False
 Ph_err = False
 DO_err = False
+target_vpd = 1.2  # kPa
 
 # Kalibrace DO
 CAL1_V = 195
@@ -173,6 +173,7 @@ while True:
         "sensor_id": "device_1",
         "temperature": round(last_temperature,2),
         "humidity": round(last_humidity,2),
+        "target_vpd": target_vpd,
         "co2": co2_value if co2_value else None, 
         "ec": EC,
         "ph": PH,
@@ -198,4 +199,4 @@ while True:
         print(f"Failed to send data: {e}")
 
     # Zpoždění mezi iteracemi
-    time.sleep(3)
+    time.sleep(10)
