@@ -177,7 +177,7 @@ while True:
         "ec": EC,
         "ph": PH,
         "do": do_value,
-        "adc_readings": {"adc0": adc0, "adc1": adc1, "adc2": adc2},
+        "adc_readings": {"adc0_EC": adc0, "adc1_Ph": adc1, "adc2_DO": adc2},
         "relays": {
             "relay1_hum_minus": GPIO.input(relay_pins[0]) == GPIO.LOW,
             "relay2_temp_minus": GPIO.input(relay_pins[1]) == GPIO.LOW,
