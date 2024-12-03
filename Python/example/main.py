@@ -1,3 +1,4 @@
+from collections import deque
 import sys
 import time
 import requests
@@ -23,6 +24,12 @@ DHT_SENSOR = Adafruit_DHT.DHT22
 DHT_PIN = 4
 THRESHOLD = 10
 SERVER_URL = "http://192.168.0.69:3000/data"
+
+# Výchozí hodnoty (první iterace)
+last_temperature = 25.0  # Výchozí teplota, např. pokojová teplota
+last_humidity = 50.0     # Výchozí vlhkost, např. typická hodnota
+# Fronta pro klouzavý průměr CO2 - 5 hodnot
+co2_values = deque(maxlen=5)
 
 # Kalibrace DO
 CAL1_V = 195
@@ -56,34 +63,50 @@ def read_do(voltage_mv, temperature_c):
         return (voltage_mv * DO_Table[temperature_index] // v_saturation)
 
 while True:
-    # Čtení teploty a vlhkosti
     humidity, temperature = Adafruit_DHT.read(DHT_SENSOR, DHT_PIN)
+    
+    # Aktualizace posledních známých hodnot, pokud jsou data platná
+    if temperature is not None:
+        last_temperature = temperature
+    else: 
+        print("Temp and hum error reading!")
+    if humidity is not None:
+        last_humidity = humidity
+
     co2_value = mh_z19.read_from_pwm()
 
-    # Čtení hodnot z ADC
-    ads1115.setGain(ADS1115_REG_CONFIG_PGA_6_144V)
-    adc0 = ads1115.readVoltage(0)['r']
-    adc1 = ads1115.readVoltage(1)['r']
-    adc2 = ads1115.readVoltage(2)['r']
-    voltage_mv = VREF * adc2 // ADC_RES
+    try:
+        # Nastavení zisku a čtení hodnoty z ADS1115
+        ads1115.setGain(ADS1115_REG_CONFIG_PGA_6_144V)
+        adc0 = ads1115.readVoltage(0)['r']
+        adc1 = ads1115.readVoltage(1)['r']
+        adc2 = ads1115.readVoltage(2)['r']
+        voltage_mv = VREF * adc2 // ADC_RES
+    except OSError as e:
+        print(f"Chyba při komunikaci s ADS1115: {e}")
+        adc0, adc1, adc2, voltage_mv = None, None, None, None  # Nastavení hodnot na None při chybě
+    
+    
 
-    # Zjištění funkčnosti EC a PH senzorů
-    EC, PH , do_value = None, None, None
-    if adc0 > THRESHOLD:
-        EC = ec.readEC(adc0, temperature if temperature else 25)
+    # Kontrola senzorů a výpočty
+    EC, PH, do_value = None, None, None
+    if adc0 and adc0 > THRESHOLD:
+        EC = ec.readEC(adc0, last_temperature if last_temperature else 25)
     else:
-        print("EC senzor nepripojen")
+        print("EC senzor nepripojen nebo chyba ADC")
 
-    if adc1 > 2800 or adc1 < 600:
-        print("PH senzor nepripojen")
+    if adc1 and (2800 > adc1 > 600):
+        PH = ph.readPH(adc1, last_temperature)
     else:
-        PH = ph.readPH(adc1, temperature)
+        print("PH senzor nepripojen nebo chyba ADC")
 
-    if adc2 > THRESHOLD:
-        do_value = read_do(voltage_mv, temperature if temperature else 25)
+    if adc2 and adc2 > THRESHOLD:
+        try:
+            do_value = read_do(voltage_mv, last_temperature if last_temperature else 25)
+        except ValueError as ve:
+            print(f"Chyba při výpočtu DO: {ve}")
     else:
-        print("DO senzor nepripojen")
-
+        print("DO senzor nepripojen nebo chyba ADC")
 
     try:
         co2_value = mh_z19.read_from_pwm()
@@ -93,8 +116,8 @@ while True:
     # Sestavení dat pro odeslání
     data = {
         "sensor_id": "device_1",
-        "temperature": temperature,
-        "humidity": humidity,
+        "temperature": round(last_temperature,2),
+        "humidity": round(last_humidity,2),
         "co2": co2_value.get("co2") if co2_value else None, 
         "ec": EC,
         "ph": PH,
