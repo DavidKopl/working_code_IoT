@@ -73,8 +73,8 @@ def load_config(config=None):
         "minCO": config.get("min_co", 600) if config else 600,
         "minCOGap": config.get("min_co_gap", 200) if config else 200,
         "target_vpd": config.get("target_vpd", 1.2) if config else 1.2,
-        "co2_min": config.get("co2_min", 600) if config else 600,
-        "co2_max": config.get("co2_max", 800) if config else 800,
+        "co2_min": config.get("co2_min", 600) if config else 600,#Mozne smazat
+        "co2_max": config.get("co2_max", 800) if config else 800, #Mozne smazat
         "temp_min": config.get("temp_min", 15) if config else 15,
         "temp_max": config.get("temp_max", 30) if config else 30,
         "humidity_min": config.get("humidity_min", 50) if config else 50,
@@ -85,31 +85,6 @@ def load_config(config=None):
 config_data = load_config(config)
 
 
-
-
-
-# DHT_PIN = 4
-# adc_threshold = 10
-# relay_pins = [10,17,27,22] 
-
-# # Výchozí hodnoty (první iterace)
-# last_temperature = 25.0  # Výchozí teplota, např. pokojová teplota
-# last_humidity = 50.0     # Výchozí vlhkost, např. typická hodnota
-# temp_hum_err = False
-# EC_err = False
-# Ph_err = False
-# DO_err = False
-# target_vpd = 1.2  # kPa
-
-# Kalibrace DO
-# CAL1_V = 195
-# CAL1_T = 25
-# DO_Table = [
-#     14460, 14220, 13820, 13440, 13090, 12740, 12420, 12110, 11810, 11530,
-#     11260, 11010, 10770, 10530, 10300, 10080, 9860, 9660, 9460, 9270,
-#     9080, 8900, 8730, 8570, 8410, 8250, 8110, 7960, 7820, 7690,
-#     7560, 7430, 7300, 7180, 7070, 6950, 6840, 6730, 6630, 6530, 6410
-# ]
 def relay_setup():
     GPIO.setmode(GPIO.BCM)  # Použití číslování GPIO pinů
     GPIO.setwarnings(False)  # Vypnutí varování
@@ -217,8 +192,7 @@ while True:
         co2_value = co2_data.get("co2", None)
     except Exception as e:
         print(f"CO2 read failed: {e}")
-        co2_value = {"co2": None}
-    # Sestavení dat pro odeslání
+        co2_value = None
 
  # Logika pro zapnutí/vypnutí relé
     if last_humidity >= config_data["maxHumidity"]:
@@ -238,7 +212,7 @@ while True:
 
     if co2_value is not None and co2_value <= config_data["minCO"]:
         relay_on(config_data["relay_pins"][3]) 
-    elif(co2_value >= config_data["minCO"] + config_data["minCOGap"]):
+    elif co2_value is not None and co2_value >= config_data["minCO"] + config_data["minCOGap"]:
         relay_off(config_data["relay_pins"][3])  
 
     # Sestavení dat pro odeslání
