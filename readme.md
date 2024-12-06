@@ -30,17 +30,10 @@ def hello_world():
 
 Instalace balicku
  1) activovat venv prostredi activate
-    * z docuemnts/wcIoT/ jit na source venv/bin/activate
+    source ~/Documents/working_code_IoT/venv/bin/activate
+    cd /home/davidkopl/Documents/working_code_IoT/Python/example
+
+
  2) pip install nazevbalicku
 
- TODO: VYRESIT CHYBU KDYZ NENI PRIPOJENE Ads1115
- Traceback (most recent call last):
-  File "/home/davidkopl/Documents/working_code_IoT/Python/example/test.py", line 65, in <module>
-    adc0 = ads1115.readVoltage(0)['r']
-           ^^^^^^^^^^^^^^^^^^^^^^
-  File "/home/davidkopl/Documents/working_code_IoT/Python/DFRobot_ADS1115.py", line 142, in readVoltage
-    self.setSingle()
-  File "/home/davidkopl/Documents/working_code_IoT/Python/DFRobot_ADS1115.py", line 110, in setSingle
-    bus.write_i2c_block_data(addr_G, ADS1115_REG_POINTER_CONFIG, CONFIG_REG)
-OSError: [Errno 5] Input/output error
 TODO: Umoznit ze serveru posilat prikaz na kalibraci EC, DO, PH
