@@ -20,7 +20,7 @@ ADS1115_REG_CONFIG_PGA_0_256V        = 0x0A # 0.256V range = Gain 16
 VREF = 5000  # Referenční napětí v mV
 ADC_RES = 32768
 DHT_SENSOR = Adafruit_DHT.DHT22
-SERVER_URL = "http://192.168.0.69:3000"#Bude nahrazeno ip-adresou serveru
+SERVER_URL = "https://aquaponicsui.onrender.com:3000"#Bude nahrazeno ip-adresou serveru || http://192.168.0.69:3000
 last_temperature = 25
 last_humidity = 50
 def fetch_config(server_url):

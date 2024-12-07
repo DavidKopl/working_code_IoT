@@ -22,12 +22,6 @@ Zapojeni na fotografii
 ---
 
 
-
-```python
-def hello_world():
-    print("Hello world")
-```
-
 Instalace balicku
  1) activovat venv prostredi activate
     source ~/Documents/working_code_IoT/venv/bin/activate
@@ -37,3 +31,6 @@ Instalace balicku
  2) pip install nazevbalicku
 
 TODO: Umoznit ze serveru posilat prikaz na kalibraci EC, DO, PH
+
+Pro debug automatickeho systemu
+journalctl -u monitoring.service
