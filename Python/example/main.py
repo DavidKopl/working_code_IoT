@@ -42,8 +42,8 @@ config = fetch_config(SERVER_URL)
 
 def load_config(config=None):
     return {
-        "wifi_ssid": config.get("wifi_ssid", "RaspberryPi") if config else "RaspberryPi",
-        "wifi_password": config.get("wifi_password", "zkushouhodnout") if config else "zkushouhodnout",
+        "wifi_ssid": config.get("wifi_ssid", "TP-Link_F7DA") if config else "TP-Link_F7DA",
+        "wifi_password": config.get("wifi_password", "84403315") if config else "84403315",
         "timesleep": config.get("timesleep", 60) if config else 60,
         "dht_pin": config.get("dht_pin", 4) if config else 4,
         "config_update_time": config.get("config_update_time", 600) if config else 600,
@@ -94,6 +94,27 @@ def load_config(config=None):
 # Použití
 config_data = load_config(config)
 
+def check_wifi_connection():
+    """Funkce pro kontrolu, zda je Wi-Fi připojena."""
+    try:
+        # Kontrola, zda je zařízení připojeno k nějaké síti
+        result = subprocess.run(["nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi"], capture_output=True, text=True)
+        
+        # Rozdělení výstupu na řádky
+        lines = result.stdout.splitlines()
+        
+        # Kontrola, zda je některý řádek s 'yes' ve sloupci ACTIVE
+        for line in lines:
+            if line.startswith('yes'):
+                return True  # Pokud je 'yes', znamená to připojení
+        
+        # Pokud není žádný 'yes', není připojeno
+        return False
+        
+    except subprocess.CalledProcessError as e:
+        print(f"Chyba při kontrole Wi-Fi připojení: {e}")
+        return False
+
 def connect_to_wifi(ssid, password):
     try:
         # Spustíme příkaz pro připojení k Wi-Fi
@@ -143,8 +164,18 @@ def read_do(voltage_mv, temperature_c):
 
 
 last_config_update = time.time()  # Čas posledního načtení konfigurace
+wifi_connected = False  # Zde uchováváme stav připojení
 while True:
     current_time = time.time()
+       # Kontrola připojení k Wi-Fi pouze každých 10 sekund (nebo jiný interval)
+    wifi_connected = check_wifi_connection()
+
+    if wifi_connected:
+        print("Již připojeno k Wi-Fi.")
+    else:
+        print("Wi-Fi není připojeno, pokusím se připojit...")
+        connect_to_wifi(config_data["wifi_ssid"], config_data["wifi_password"])
+        
     print(last_config_update, " - ",current_time, " = ",current_time-last_config_update)
     # Každou minutu načíst konfiguraci
     if current_time - last_config_update >= config_data["config_update_time"]:
