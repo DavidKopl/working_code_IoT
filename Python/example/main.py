@@ -1,7 +1,10 @@
 from collections import deque
+import network
+import os
 import sys
 import RPi.GPIO as GPIO
 import time
+import subprocess
 import requests
 import json
 import mh_z19
@@ -20,7 +23,8 @@ ADS1115_REG_CONFIG_PGA_0_256V        = 0x0A # 0.256V range = Gain 16
 VREF = 5000  # Referenční napětí v mV
 ADC_RES = 32768
 DHT_SENSOR = Adafruit_DHT.DHT22
-SERVER_URL = "https://aquaponicsui.onrender.com"#Bude nahrazeno ip-adresou serveru || http://192.168.0.69:3000
+#SERVER_URL = "https://aquaponicsui.onrender.com"#Bude nahrazeno ip-adresou serveru || http://192.168.0.69:3000
+SERVER_URL = "http://192.168.0.69:3000"
 last_temperature = 25
 last_humidity = 50
 def fetch_config(server_url):
@@ -35,9 +39,13 @@ def fetch_config(server_url):
         return None
     
 config = fetch_config(SERVER_URL)
+
 def load_config(config=None):
     return {
-        "DHT_PIN": config.get("dht_pin", 4) if config else 4,
+        "wifi_ssid": config.get("wifi_ssid", "RaspberryPi") if config else "RaspberryPi",
+        "wifi_password": config.get("wifi_password", "zkushouhodnout") if config else "zkushouhodnout",
+        "timesleep": config.get("timesleep", 60) if config else 60,
+        "dht_pin": config.get("dht_pin", 4) if config else 4,
         "config_update_time": config.get("config_update_time", 600) if config else 600,
         "relay_pins": config.get("relay_pins", [10, 17, 27, 22]) if config else [10, 17, 27, 22],
         "adc_threshold": config.get("adc_threshold", 10) if config else 10,
@@ -80,10 +88,22 @@ def load_config(config=None):
         "humidity_min": config.get("humidity_min", 50) if config else 50,
         "humidity_max": config.get("humidity_max", 90) if config else 90,
     }
+ 
+
 
 # Použití
 config_data = load_config(config)
 
+def connect_to_wifi(ssid, password):
+    try:
+        # Spustíme příkaz pro připojení k Wi-Fi
+        subprocess.run(["nmcli", "dev", "wifi", "connect", ssid, "password", password], check=True)
+        print(f"Connected to {ssid}")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to connect to {ssid}: {e}")
+
+    # Try connecting to the preferred Wi-Fi
+connect_to_wifi(config_data["wifi_ssid"], config_data["wifi_password"])
 
 def relay_setup():
     GPIO.setmode(GPIO.BCM)  # Použití číslování GPIO pinů
@@ -133,7 +153,7 @@ while True:
             config_data = load_config(config)
         last_config_update = current_time
 
-    humidity, temperature = Adafruit_DHT.read(DHT_SENSOR, config_data["DHT_PIN"])
+    humidity, temperature = Adafruit_DHT.read(DHT_SENSOR, config_data["dht_pin"])
     
     # Aktualizace posledních známých hodnot, pokud jsou data platná + info o erroru.
     if temperature and humidity is not None:
@@ -236,15 +256,22 @@ while True:
         "errors": {"temp_hum_err":temp_hum_err, "EC_error": EC_err, "Ph_error": Ph_err, "DO_error":DO_err}
     }
 
+    # config_payload = {
+    #     "sensor_id": "device_1"
+    # }
+
     # Odeslání dat na server
     headers = {"Content-Type": "application/json"}
     try:
         response = requests.post(f"{SERVER_URL}/data", data=json.dumps(data), headers=headers)
         print(f"Server responded with status: \033[32m{response.status_code}\033[0m")
         print(f"\033[32m{response.text}\033[0m")
+        # response = requests.post(f"{SERVER_URL}/config", data=json.dumps(config_payload), headers=headers)
+        # print(f"Server responded with status: \033[32m{response.status_code}\033[0m")
+        # print(f"\033[32m{response.text}\033[0m")
 
     except Exception as e:
         print(f"Failed to send data: {e}")
 
     # Zpoždění mezi iteracemi
-    time.sleep(10)
+    time.sleep(config_data["timesleep"])

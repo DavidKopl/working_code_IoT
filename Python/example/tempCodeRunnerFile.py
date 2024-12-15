@@ -1,1 +1,2 @@
-:3000
+
+last_humidity = 50
