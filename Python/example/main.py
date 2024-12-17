@@ -23,8 +23,8 @@ ADS1115_REG_CONFIG_PGA_0_256V        = 0x0A # 0.256V range = Gain 16
 VREF = 5000  # Referenční napětí v mV
 ADC_RES = 32768
 DHT_SENSOR = Adafruit_DHT.DHT22
-#SERVER_URL = "https://aquaponicsui.onrender.com"#Bude nahrazeno ip-adresou serveru || http://192.168.0.69:3000
-SERVER_URL = "http://192.168.0.69:3000"
+#SERVER_URL = "https://aquaponicsui.onrender.com"#Bude nahrazeno ip-adresou serveru || http://192.168.0.69:3001
+SERVER_URL = "http://192.168.0.69:3001"
 last_temperature = 25
 last_humidity = 50
 def fetch_config(server_url):
@@ -49,8 +49,6 @@ def load_config(config=None):
         "config_update_time": config.get("config_update_time", 600) if config else 600,
         "relay_pins": config.get("relay_pins", [10, 17, 27, 22]) if config else [10, 17, 27, 22],
         "adc_threshold": config.get("adc_threshold", 10) if config else 10,
-        # "last_temperature": config.get("last_temperature", 25) if config else 25,
-        # "last_humidity": config.get("last_humidity", 50) if config else 50,
         "temp_hum_err": config.get("temp_hum_err", False) if config else False,
         "EC_err": config.get("ec_err", False) if config else False,
         "Ph_err": config.get("ph_err", False) if config else False,
@@ -89,8 +87,6 @@ def load_config(config=None):
         "humidity_max": config.get("humidity_max", 90) if config else 90,
     }
  
-
-
 # Použití
 config_data = load_config(config)
 
@@ -152,7 +148,6 @@ def relay_off(pin):
 # def cleanup():
 #     GPIO.cleanup()  # Reset GPIO pinů do výchozího stavu
 
-
 def read_do(voltage_mv, temperature_c):
     temperature_index = int(temperature_c)
     if temperature_index < 0 or temperature_index >= len(config_data["DO_Table"]):
@@ -163,7 +158,7 @@ def read_do(voltage_mv, temperature_c):
         return (voltage_mv * config_data["DO_Table"][temperature_index] // v_saturation)
 
 
-last_config_update = time.time()  # Čas posledního načtení konfigurace
+last_config_update = time.time()  # Čas posledního načtení konfigurace 
 wifi_connected = False  # Zde uchováváme stav připojení
 while True:
     current_time = time.time()
@@ -171,7 +166,7 @@ while True:
     wifi_connected = check_wifi_connection()
 
     if wifi_connected:
-        print("Již připojeno k Wi-Fi.")
+        print("Wi-Fi is active")
     else:
         print("Wi-Fi není připojeno, pokusím se připojit...")
         connect_to_wifi(config_data["wifi_ssid"], config_data["wifi_password"])
@@ -182,6 +177,7 @@ while True:
         config = fetch_config(SERVER_URL)
         if config:
             config_data = load_config(config)
+            print(config_data)
         last_config_update = current_time
 
     humidity, temperature = Adafruit_DHT.read(DHT_SENSOR, config_data["dht_pin"])
@@ -241,8 +237,8 @@ while True:
     try:
         co2_data = mh_z19.read_from_pwm()
         co2_value = co2_data.get("co2", None)
+        
     except Exception as e:
-        print(f"CO2 read failed: {e}")
         co2_value = None
 
  # Logika pro zapnutí/vypnutí relé
@@ -286,20 +282,12 @@ while True:
         
         "errors": {"temp_hum_err":temp_hum_err, "EC_error": EC_err, "Ph_error": Ph_err, "DO_error":DO_err}
     }
-
-    # config_payload = {
-    #     "sensor_id": "device_1"
-    # }
-
     # Odeslání dat na server
     headers = {"Content-Type": "application/json"}
     try:
         response = requests.post(f"{SERVER_URL}/data", data=json.dumps(data), headers=headers)
         print(f"Server responded with status: \033[32m{response.status_code}\033[0m")
         print(f"\033[32m{response.text}\033[0m")
-        # response = requests.post(f"{SERVER_URL}/config", data=json.dumps(config_payload), headers=headers)
-        # print(f"Server responded with status: \033[32m{response.status_code}\033[0m")
-        # print(f"\033[32m{response.text}\033[0m")
 
     except Exception as e:
         print(f"Failed to send data: {e}")
