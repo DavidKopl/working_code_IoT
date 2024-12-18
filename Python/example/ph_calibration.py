@@ -13,31 +13,20 @@ ph = DFRobot_PH()
 ph.begin()
 
 # Soubor pro uložení kalibrace
-CALIBRATION_FILE = "calibration.json"
+CALIBRATION_FILE = "ph_calibration.json"
 
-def save_calibration_ph(value):
-    """ Uložení kalibrační hodnoty pH do JSON souboru. """
-    try:
-        # Načtení existujícího obsahu
-        with open(CALIBRATION_FILE, "r") as file:
-            data = json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        data = {}
-
-    # Aktualizace sekce pro pH
-    data["ph"] = {"ph_7_voltage": value}
-
-    # Uložení zpět do souboru
+def save_calibration(value):
+    """ Uložení kalibrační hodnoty do souboru. """
     with open(CALIBRATION_FILE, "w") as file:
-        json.dump(data, file, indent=4)
-    print("Kalibrační hodnota pH uložena:", value)
+        json.dump({"calibration_value": value}, file)
+    print("Kalibrační hodnota uložena:", value)
 
-def load_calibration_ph():
-    """ Načtení kalibrační hodnoty pH ze JSON souboru. """
+def load_calibration():
+    """ Načtení kalibrační hodnoty ze souboru. """
     try:
         with open(CALIBRATION_FILE, "r") as file:
             data = json.load(file)
-            return data.get("ph", {}).get("ph_7_voltage", None)
+            return data.get("calibration_value", None)
     except FileNotFoundError:
         print("Kalibrační soubor neexistuje.")
         return None
@@ -55,12 +44,12 @@ def calibrate_ph():
 
     print(f"Kalibrační hodnota ADC: {adc_value} mV")
     ph.calibration(adc_value)  # Kalibrace pomocí knihovny
-    save_calibration_ph(adc_value)  # Uložení kalibrační hodnoty
+    save_calibration(adc_value)  # Uložení kalibrační hodnoty
 
 # Použití senzoru
 def measure_ph(temperature=25):
     """ Měření pH pomocí senzoru s použitím kalibrační hodnoty. """
-    calibration_value = load_calibration_ph()
+    calibration_value = load_calibration()
     if calibration_value is None:
         print("Kalibrace nebyla provedena! Nejprve spusťte kalibraci.")
         return

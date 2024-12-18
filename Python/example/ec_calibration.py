@@ -1,7 +1,6 @@
 import sys
 import time
 from datetime import datetime
-import json
 
 # Přidání cesty pro vlastní knihovny
 sys.path.append('/home/davidkopl/Documents/working_code_IoT/Python')
@@ -17,78 +16,22 @@ ADS1115_REG_CONFIG_PGA_6_144V = 0x00  # 6.144V range = Gain 2/3
 ads1115 = ADS1115()
 ec_sensor = DFRobot_EC()
 
-# Soubor pro kalibraci
-CALIBRATION_FILE = "calibration.json"
+ec_sensor.begin()
 
-def save_calibration_ec(voltage, standard_ec):
-    """ Uložení kalibrace EC senzoru do JSON souboru. """
+
+def measure_and_calibrate_ec(ads1115, ec, temperature=25):
     try:
-        # Načtení existujícího obsahu
-        with open(CALIBRATION_FILE, "r") as file:
-            data = json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError):
-        data = {}
-
-    # Aktualizace sekce pro EC
-    data["ec"] = {
-        "calibration_voltage": voltage,
-        "standard_ec": standard_ec
-    }
-
-    # Uložení zpět do souboru
-    with open(CALIBRATION_FILE, "w") as file:
-        json.dump(data, file, indent=4)
-    print("Kalibrace EC senzoru uložena:", data["ec"])
-
-def load_calibration_ec():
-    """ Načtení kalibrace EC senzoru z JSON souboru. """
-    try:
-        with open(CALIBRATION_FILE, "r") as file:
-            data = json.load(file)
-            return data.get("ec", {})
-    except FileNotFoundError:
-        print("Kalibrační soubor neexistuje.")
-        return {}
-
-def initialize_sensors():
-    """Inicializace EC senzoru."""
-    ec_sensor.begin()
-    print("EC sensor initialized.")
-
-def calibrate_ec():
-    """
-    Funkce pro kalibraci EC senzoru.
-    Uživateli umožní zadat hodnotu standardního roztoku
-    a na jejím základě provede kalibraci.
-    """
-    try:
-        print("=== EC Calibration ===")
-        input("Připravte prosím standardní roztok a stiskněte Enter...")
-        
-        # Nastavení ADS1115
         ads1115.setAddr_ADS1115(0x48)
         ads1115.setGain(ADS1115_REG_CONFIG_PGA_6_144V)
-        
-        # Změření napětí z ADC na kanálu 0
-        adc_value = ads1115.readVoltage(0)
-        if 'r' not in adc_value:
-            print("Error: Invalid ADC reading during calibration.")
-            return
-        
-        # Zobrazení změřeného napětí
-        voltage = adc_value['r']
-        print(f"Naměřené napětí: {voltage:.3f} V")
-        
-        # Zadání hodnoty standardního roztoku od uživatele
-        standard_ec = float(input("Zadejte hodnotu EC standardního roztoku (v ms/cm): "))
-        
-        # Kalibrace senzoru
-        ec_sensor.calibration(voltage, standard_ec)
-        save_calibration_ec(voltage, standard_ec)
-        print("Kalibrace dokončena.")
-
+        adc0 = ads1115.readVoltage(0)
+        if adc0 is None:
+            raise ValueError("Nepodařilo se přečíst hodnotu z ADS1115.")
+        print(f"A0: {adc0['r']} mV")  # Zobrazení hodnoty v mV
+        ec.calibration(adc0['r'], temperature)
+        # print(f"EC senzor byl úspěšně kalibrován na hodnotu {adc0['r']} mV při teplotě {temperature}°C.")
     except Exception as e:
-        print(f"Error during calibration: {e}")
+        print(f"Chyba při měření nebo kalibraci: {e}")
+
 
 def read_temperature():
     """Funkce pro čtení teploty - statická hodnota 25 °C."""
@@ -100,30 +43,23 @@ def read_ec():
         # Nastavení ADS1115
         ads1115.setAddr_ADS1115(0x48)
         ads1115.setGain(ADS1115_REG_CONFIG_PGA_6_144V)
-        
         # Čtení napětí z ADC
         adc_value = ads1115.readVoltage(0)
         if 'r' not in adc_value:
             print("Error: Invalid ADC value.")
             return
-        
         # Čtení teploty
         temperature = read_temperature()
-        
         # Výpočet EC hodnoty
         ec_value = ec_sensor.readEC(adc_value['r'], temperature)
-        
         # Výstup
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # print(f"[{timestamp}] Temperature: {temperature:.1f} °C, EC: {ec_value:.2f} ms/cm ")
-        print(f"[{timestamp}] Temperature: {temperature:.1f} °C, EC: {ec_value:.4f} ms/cm a EC: {ec_value * 1000:.0f} uS/cm")
-    
+        print(f"[{timestamp}] Temperature: {temperature:.1f} °C, EC: {ec_value:.2f} ms/cm a EC: {ec_value * 1000:.0f} uS/cm")
     
     except Exception as e:
         print(f"Error while reading EC: {e}")
 
 if __name__ == "__main__":
-    initialize_sensors()
     
     while True:
         print("\n1: Měření EC hodnoty")
@@ -134,7 +70,8 @@ if __name__ == "__main__":
         if choice == "1":
             read_ec()
         elif choice == "2":
-            calibrate_ec()
+            # ec_sensor.calibration(adc0['r'],ec_sensor, 23)
+            measure_and_calibrate_ec(ads1115,ec_sensor, 23)
         elif choice == "3":
             print("Program ukončen.")
             break

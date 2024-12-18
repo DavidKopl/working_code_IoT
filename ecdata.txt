@@ -1,2 +1,2 @@
-kvalueLow=0.5753900455770925
+kvalueLow=0.9618875689655172
 kvalueHigh=1.0
