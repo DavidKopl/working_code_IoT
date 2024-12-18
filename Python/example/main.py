@@ -357,34 +357,14 @@ while True:
 
     # Kontrola senzorů a výpočty
     EC, PH, do_value = None, None, None
-    if adc0 and adc0 > config_data["adc_threshold"]:
-        EC = ec.readEC(adc0, last_temperature if last_temperature else 25)
-        EC_err = False
-    elif(adc0 == None or adc0 < 5):
-        # print("EC senzor nepripojen nebo chyba ADC")
-        EC_err = False
-    else:
-        EC_err = True
-
-    if adc1 and (2200 > adc1 > 600):
+    try:
+        do_value = read_do(voltage_mv, last_temperature if last_temperature else 25)
+        print(do_value, voltage_mv, last_temperature, temperature)
         PH = ph.readPH(adc1, last_temperature)
-        Ph_err = False
-    elif(adc1 == None or adc1 >2700):
-        # print("PH senzor nepripojen nebo chyba ADC")
-        Ph_err = False
-    else:
-        Ph_err = True
+        EC = ec.readEC(adc0, last_temperature if last_temperature else 25)
+    except ValueError as ve:
+        print(f"Chyba při výpočtu DO,pH nebo EC zde: {ve}")
 
-    if adc2 and adc2 > config_data["adc_threshold"]:
-        try:
-            do_value = read_do(voltage_mv, last_temperature if last_temperature else 25)
-            DO_err = False
-        except ValueError as ve:
-            print(f"Chyba při výpočtu DO zde: {ve}")
-            DO_err = True
-    else:
-        # print("DO senzor nepripojen nebo chyba ADC")
-        DO_err = False
 
     try:
         co2_data = mh_z19.read_from_pwm()
@@ -422,6 +402,9 @@ while True:
         relay_off(config_data["relay_pins"][3])  
 
     # Sestavení dat pro odeslání
+
+    print(do_value)#Tady mam jeste data o do
+    print(co2_value)
     data = {
         "sensor_id": "device_1",
         "temperature": round(last_temperature,2),
@@ -430,7 +413,7 @@ while True:
         "co2": co2_value if co2_value else None, 
         "ec": EC,
         "ph": PH,
-        "do": do_value,
+        "do_value": do_value,
         "adc_readings": {"adc0_EC": adc0, "adc1_Ph": adc1, "adc2_DO": adc2},
         "relays": {
             "relay1_hum_minus": GPIO.input(config_data["relay_pins"][0]) == GPIO.LOW,
@@ -439,7 +422,7 @@ while True:
             "relay4_co2_plus": GPIO.input(config_data["relay_pins"][3]) == GPIO.LOW,
         },
         
-        "errors": {"temp_hum_err":temp_hum_err, "EC_error": EC_err, "Ph_error": Ph_err, "DO_error":DO_err}
+        "errors": {"temp_hum_err":temp_hum_err}
     }
     # Odeslání dat na server
     headers = {"Content-Type": "application/json"}
