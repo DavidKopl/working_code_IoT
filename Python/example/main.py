@@ -27,12 +27,14 @@ DHT_SENSOR = Adafruit_DHT.DHT22
 SERVER_URL = "http://192.168.0.69:3001"
 last_temperature = 25
 last_humidity = 50
+CAL1_V = 108.48  # Kalibrační napětí v mV
+CAL1_T = 23   # Kalibrační teplota
 def fetch_config(server_url):
     try:
         response = requests.get(f"{server_url}/config")
         response.raise_for_status()
         config = response.json()
-        print("Config fetched:", config)
+        # print("Config fetched:", config)
         return config
     except Exception as e:
         print(f"Failed to fetch config: {e}")
@@ -54,8 +56,13 @@ def load_config(config=None):
         "Ph_err": config.get("ph_err", False) if config else False,
         "DO_err": config.get("do_err", False) if config else False,
         "ONE_POINT_CALIBRATION": config.get("one_point_calibration", True) if config else True,
-        "CAL1_V": config.get("cal1_v", 195) if config else 195,
-        "CAL1_T": config.get("cal1_t", 25) if config else 25,
+        "doCalibration": config.get("doCalibration", False) if config else False,
+        "phCalibration": config.get("phCalibration", False) if config else False,
+        "ecCalibration": config.get("ecCalibration", False) if config else False,
+          "last_temperature": config.get("last_temperature", 25) if config else 25,
+        "last_humidity": config.get("last_humidity", 50) if config else 50,
+        "CAL1_V": config.get("cal1_v", 195) if config else 195,#smazat
+        "CAL1_T": config.get("cal1_t", 25) if config else 25,#smazat
         "DO_Table": config.get(
             "do_table",
             [
@@ -148,22 +155,167 @@ def relay_off(pin):
 # def cleanup():
 #     GPIO.cleanup()  # Reset GPIO pinů do výchozího stavu
 
-def read_do(voltage_mv, temperature_c):
-    temperature_index = int(temperature_c)
-    if temperature_index < 0 or temperature_index >= len(config_data["DO_Table"]):
-        raise ValueError("Temperature index out of range for DO_Table")
+CALIBRATION_FILE = "calibration.json"  # Název souboru s kalibrací
+def load_calibration():
+    """ Načtení kalibračních hodnot z JSON souboru """
+    global CAL1_V, CAL1_T
+    try:
+        with open(CALIBRATION_FILE, "r") as file:
+            data = json.load(file)
+            if "DO" in data:
+                CAL1_V = data["DO"].get("voltage", CAL1_V)
+                CAL1_T = data["DO"].get("temperature", CAL1_T)
+                # print(f"Načtení kalibrace: CAL1_V = {CAL1_V} mV, CAL1_T = {CAL1_T} °C")
+            else:
+                print("Sekce 'DO' nenalezena v kalibračním souboru. Používají se výchozí hodnoty.")
+    except FileNotFoundError:
+        print("Kalibrační soubor nenalezen. Používají se výchozí hodnoty.")
+    except json.JSONDecodeError:
+        print("Chyba při čtení kalibračního souboru. Používají se výchozí hodnoty.")
+
+def save_calibration():
+    """ Uložení aktuálních kalibračních hodnot DO do JSON souboru (přepisování pouze DO) """
+    try:
+        # Načtení existujícího souboru pro zachování ostatních dat
+        with open(CALIBRATION_FILE, "r") as file:
+            data = json.load(file)
+        
+        # Uložení nových hodnot DO
+        data["DO"] = {
+            "voltage": CAL1_V,
+            "temperature": CAL1_T
+        }
+
+        # Uložení zpět do souboru
+        with open(CALIBRATION_FILE, "w") as file:
+            json.dump(data, file, indent=4)
+        print(f"Kalibrace DO uložena: CAL1_V = {CAL1_V} mV, CAL1_T = {CAL1_T} °C")
     
-    if config_data["ONE_POINT_CALIBRATION"]:
-        v_saturation = config_data["CAL1_V"] + 35 * temperature_c - config_data["CAL1_T"] * 35
-        return (voltage_mv * config_data["DO_Table"][temperature_index] // v_saturation)
+    except FileNotFoundError:
+        print("Kalibrační soubor nenalezen. Vytvářím nový.")
+        # Pokud soubor neexistuje, vytvořte nový soubor
+        data = {
+            "DO": {
+                "voltage": CAL1_V,
+                "temperature": CAL1_T
+            }
+        }
+        with open(CALIBRATION_FILE, "w") as file:
+            json.dump(data, file, indent=4)
+        print(f"Kalibrace DO uložena (nový soubor): CAL1_V = {CAL1_V} mV, CAL1_T = {CAL1_T} °C")
+
+def calibrate_do(voltage_mv, temp_c):
+    """ Kalibrační procedura DO senzoru """
+    print("=== Kalibrace DO senzoru ===")
+    if voltage_mv:
+        global CAL1_V, CAL1_T
+        CAL1_V = voltage_mv
+        CAL1_T = temp_c
+        save_calibration()  # Uložení nové kalibrace
+        print(f"Kalibrace dokončena: CAL1_V = {CAL1_V} mV, CAL1_T = {CAL1_T} °C")
+    else:
+        print("Nepodařilo se načíst napětí z ADC. Zkuste znovu.")
+
+def read_do(voltage_mv, temperature_c):
+    """ Výpočet hodnoty rozpuštěného kyslíku (DO) """
+    try:
+        # Kontrola vstupních hodnot
+        if CAL1_V is None or temperature_c is None or CAL1_T is None:
+            print(CAL1_T, CAL1_V, temperature_c)
+            raise ValueError("Neplatné hodnoty kalibrace nebo teploty.")
+
+        temp_index = int(temperature_c)
+        if temp_index < 0 or temp_index >= len(config_data["DO_Table"]):
+            raise ValueError("Teplota mimo rozsah DO tabulky.")
+        
+        v_saturation = CAL1_V + 35 * temperature_c - CAL1_T * 35
+        if v_saturation == 0:
+            raise ZeroDivisionError("Hodnota v_saturation je nulová.")
+        
+        do_value = voltage_mv * config_data["DO_Table"][temp_index] / v_saturation
+        return round(do_value, 2)
+    except ValueError as e:
+        print(f"Chyba při výpočtu DO: {e}")
+        return None
+    except ZeroDivisionError as e:
+        print(f"Chyba při výpočtu DO (dělení nulou): {e}")
+        return None
+
+
+# def read_do(voltage_mv, temperature_c):
+#     temperature_index = int(temperature_c)
+#     if temperature_index < 0 or temperature_index >= len(config_data["DO_Table"]):
+#         raise ValueError("Temperature index out of range for DO_Table")
+    
+#     if config_data["ONE_POINT_CALIBRATION"]:
+#         v_saturation = config_data["CAL1_V"] + 35 * temperature_c - config_data["CAL1_T"] * 35
+#         return (voltage_mv * config_data["DO_Table"][temperature_index] // v_saturation)
+def calibrate_ph_sensor(ads1115, ph, temperature=25):
+    try:
+        ads1115.setAddr_ADS1115(0x48)
+        ads1115.setGain(ADS1115_REG_CONFIG_PGA_6_144V)
+        # Čtení napětí z ADC kanálu 1
+        adc0 = ads1115.readVoltage(1)
+        print(f"A0: {adc0['r']} mV")
+        # Kalibrace pH senzoru
+        ph.calibration(adc0['r'])
+        # Pauza pro stabilizaci
+        time.sleep(1.0)
+        
+    except Exception as e:
+        print(f"Chyba při kalibraci pH senzoru: {e}")
+
+def calibrate_ec(adc, ec, temperature=25):
+    try:
+        # ads1115.setAddr_ADS1115(0x48)
+        # ads1115.setGain(ADS1115_REG_CONFIG_PGA_6_144V)
+        # adc0 = ads1115.readVoltage(0)
+        if adc is None:
+            # print(adc)
+            raise ValueError("Nepodařilo se přečíst hodnotu z ADS1115.")
+
+        print(f"A0: {adc} mV")  # Zobrazení hodnoty v mV
+        ec.calibration(adc, temperature)
+        # print(f"EC senzor byl úspěšně kalibrován na hodnotu {adc0['r']} mV při teplotě {temperature}°C.")
+    except Exception as e:
+        print(f"Chyba při měření nebo kalibraci EC: {e}")
 
 
 last_config_update = time.time()  # Čas posledního načtení konfigurace 
 wifi_connected = False  # Zde uchováváme stav připojení
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 while True:
     current_time = time.time()
        # Kontrola připojení k Wi-Fi pouze každých 10 sekund (nebo jiný interval)
     wifi_connected = check_wifi_connection()
+    load_calibration()
 
     if wifi_connected:
         print("Wi-Fi is active")
@@ -177,7 +329,7 @@ while True:
         config = fetch_config(SERVER_URL)
         if config:
             config_data = load_config(config)
-            print(config_data)
+            print(config_data["doCalibration"], config_data["phCalibration"], config_data["ecCalibration"])
         last_config_update = current_time
 
     humidity, temperature = Adafruit_DHT.read(DHT_SENSOR, config_data["dht_pin"])
@@ -209,7 +361,7 @@ while True:
         EC = ec.readEC(adc0, last_temperature if last_temperature else 25)
         EC_err = False
     elif(adc0 == None or adc0 < 5):
-        print("EC senzor nepripojen nebo chyba ADC")
+        # print("EC senzor nepripojen nebo chyba ADC")
         EC_err = False
     else:
         EC_err = True
@@ -218,7 +370,7 @@ while True:
         PH = ph.readPH(adc1, last_temperature)
         Ph_err = False
     elif(adc1 == None or adc1 >2700):
-        print("PH senzor nepripojen nebo chyba ADC")
+        # print("PH senzor nepripojen nebo chyba ADC")
         Ph_err = False
     else:
         Ph_err = True
@@ -228,10 +380,10 @@ while True:
             do_value = read_do(voltage_mv, last_temperature if last_temperature else 25)
             DO_err = False
         except ValueError as ve:
-            print(f"Chyba při výpočtu DO: {ve}")
+            print(f"Chyba při výpočtu DO zde: {ve}")
             DO_err = True
     else:
-        print("DO senzor nepripojen nebo chyba ADC")
+        # print("DO senzor nepripojen nebo chyba ADC")
         DO_err = False
 
     try:
@@ -240,6 +392,13 @@ while True:
         
     except Exception as e:
         co2_value = None
+#Kalibrace
+    if config_data["phCalibration"]:
+        calibrate_ph_sensor(ads1115,ph, last_temperature)
+    if config_data["doCalibration"]:
+        calibrate_do(voltage_mv,last_temperature)
+    if config_data["ecCalibration"]:
+        calibrate_ec(adc0,ec,last_temperature)
 
  # Logika pro zapnutí/vypnutí relé
     if last_humidity >= config_data["maxHumidity"]:
