@@ -1,3 +1,4 @@
+import json
 import time
 import sys
 sys.path.append('/home/davidkopl/Documents/working_code_IoT/Python')
@@ -27,7 +28,7 @@ ec.begin()
 ph.begin()
 
 # Kalibrační nastavení
-ONE_POINT_CALIBRATION = True
+CALIBRATION_FILE = "calibration.json"  # Název souboru s kalibrací
 CAL1_V = 108.48  # Kalibrační napětí v mV
 CAL1_T = 23   # Kalibrační teplota
 
@@ -39,12 +40,9 @@ def calculate_do(voltage_mv, temperature_c):
         if temp_index < 0 or temp_index >= len(DO_TABLE):
             raise ValueError("Teplota mimo rozsah DO tabulky.")
         
-        if ONE_POINT_CALIBRATION:
-            v_saturation = CAL1_V + 35 * temperature_c - CAL1_T * 35
-            do_value = voltage_mv * DO_TABLE[temp_index] / v_saturation
-            return round(do_value, 2)
-        else:
-            return None
+        v_saturation = CAL1_V + 35 * temperature_c - CAL1_T * 35
+        do_value = voltage_mv * DO_TABLE[temp_index] / v_saturation
+        return round(do_value, 2)
     except ValueError as e:
         print(f"Chyba při výpočtu DO: {e}")
         return None
@@ -55,10 +53,8 @@ def read_adc_voltage(channel):
     ads1115.setGain(ADS1115_REG_CONFIG_PGA_6_144V)
     try:
         adc_reading = ads1115.readVoltage(channel)
-        print(f"ADC Reading: {adc_reading}")  # Debugging line
         if adc_reading and 'r' in adc_reading:
             voltage_mv = VREF * adc_reading['r'] / ADC_RES
-            print(f"Voltage (mV): {voltage_mv}")  # Debugging line
             return voltage_mv
         else:
             print(f"Chyba při čtení ADC kanálu {channel}")
@@ -67,26 +63,37 @@ def read_adc_voltage(channel):
         print(f"Chyba při čtení ADC: {e}")
         return None
 
+
 def load_calibration():
-    """ Načtení kalibračních hodnot z textového souboru """
+    """ Načtení kalibračních hodnot z JSON souboru """
+    global CAL1_V, CAL1_T
     try:
-        with open("calibration.txt", "r") as file:
-            lines = file.readlines()
-            global CAL1_V, CAL1_T
-            if len(lines) >= 2:
-                CAL1_V = float(lines[0].strip())
-                CAL1_T = float(lines[1].strip())
+        with open(CALIBRATION_FILE, "r") as file:
+            data = json.load(file)
+            if "DO" in data:
+                CAL1_V = data["DO"].get("voltage", CAL1_V)
+                CAL1_T = data["DO"].get("temperature", CAL1_T)
                 print(f"Načtení kalibrace: CAL1_V = {CAL1_V} mV, CAL1_T = {CAL1_T} °C")
             else:
-                print("Kalibrační soubor neobsahuje dostatek dat.")
+                print("Sekce 'DO' nenalezena v kalibračním souboru. Používají se výchozí hodnoty.")
     except FileNotFoundError:
-        print("Kalibrační soubor nenalezen, kalibruji nový...")
+        print("Kalibrační soubor nenalezen. Používají se výchozí hodnoty.")
+    except json.JSONDecodeError:
+        print("Chyba při čtení kalibračního souboru. Používají se výchozí hodnoty.")
+
 
 def save_calibration():
-    """ Uložení aktuálních kalibračních hodnot do textového souboru """
-    with open("calibration.txt", "w") as file:
-        file.write(f"{CAL1_V}\n{CAL1_T}\n")
+    """ Uložení aktuálních kalibračních hodnot do JSON souboru """
+    data = {
+        "DO": {
+            "voltage": CAL1_V,
+            "temperature": CAL1_T
+        }
+    }
+    with open(CALIBRATION_FILE, "w") as file:
+        json.dump(data, file, indent=4)
     print(f"Kalibrace uložena: CAL1_V = {CAL1_V} mV, CAL1_T = {CAL1_T} °C")
+
 
 def calibrate_do():
     """ Kalibrační procedura DO senzoru """
