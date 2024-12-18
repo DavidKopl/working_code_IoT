@@ -81,20 +81,37 @@ def load_calibration():
     except json.JSONDecodeError:
         print("Chyba při čtení kalibračního souboru. Používají se výchozí hodnoty.")
 
-
 def save_calibration():
-    """ Uložení aktuálních kalibračních hodnot do JSON souboru """
-    data = {
-        "DO": {
+    """ Uložení aktuálních kalibračních hodnot DO do JSON souboru (přepisování pouze DO) """
+    try:
+        # Načtení existujícího souboru pro zachování ostatních dat
+        with open(CALIBRATION_FILE, "r") as file:
+            data = json.load(file)
+        
+        # Uložení nových hodnot DO
+        data["DO"] = {
             "voltage": CAL1_V,
             "temperature": CAL1_T
         }
-    }
-    with open(CALIBRATION_FILE, "w") as file:
-        json.dump(data, file, indent=4)
-    print(f"Kalibrace uložena: CAL1_V = {CAL1_V} mV, CAL1_T = {CAL1_T} °C")
 
-
+        # Uložení zpět do souboru
+        with open(CALIBRATION_FILE, "w") as file:
+            json.dump(data, file, indent=4)
+        print(f"Kalibrace DO uložena: CAL1_V = {CAL1_V} mV, CAL1_T = {CAL1_T} °C")
+    
+    except FileNotFoundError:
+        print("Kalibrační soubor nenalezen. Vytvářím nový.")
+        # Pokud soubor neexistuje, vytvořte nový soubor
+        data = {
+            "DO": {
+                "voltage": CAL1_V,
+                "temperature": CAL1_T
+            }
+        }
+        with open(CALIBRATION_FILE, "w") as file:
+            json.dump(data, file, indent=4)
+        print(f"Kalibrace DO uložena (nový soubor): CAL1_V = {CAL1_V} mV, CAL1_T = {CAL1_T} °C")
+        
 def calibrate_do():
     """ Kalibrační procedura DO senzoru """
     print("=== Kalibrace DO senzoru ===")
@@ -105,7 +122,7 @@ def calibrate_do():
         global CAL1_V, CAL1_T
         CAL1_V = voltage_mv
         CAL1_T = temp_c
-        save_calibration()
+        save_calibration()  # Uložení nové kalibrace
         print(f"Kalibrace dokončena: CAL1_V = {CAL1_V} mV, CAL1_T = {CAL1_T} °C")
     else:
         print("Nepodařilo se načíst napětí z ADC. Zkuste znovu.")

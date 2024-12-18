@@ -1,2 +1,2 @@
-neutralVoltage=1513
+neutralVoltage=1677
 acidVoltage=2032.44

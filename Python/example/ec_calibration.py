@@ -1,6 +1,7 @@
 import sys
 import time
 from datetime import datetime
+import json
 
 # Přidání cesty pro vlastní knihovny
 sys.path.append('/home/davidkopl/Documents/working_code_IoT/Python')
@@ -15,6 +16,39 @@ ADS1115_REG_CONFIG_PGA_6_144V = 0x00  # 6.144V range = Gain 2/3
 # Inicializace ADS1115 a EC senzoru
 ads1115 = ADS1115()
 ec_sensor = DFRobot_EC()
+
+# Soubor pro kalibraci
+CALIBRATION_FILE = "calibration.json"
+
+def save_calibration_ec(voltage, standard_ec):
+    """ Uložení kalibrace EC senzoru do JSON souboru. """
+    try:
+        # Načtení existujícího obsahu
+        with open(CALIBRATION_FILE, "r") as file:
+            data = json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError):
+        data = {}
+
+    # Aktualizace sekce pro EC
+    data["ec"] = {
+        "calibration_voltage": voltage,
+        "standard_ec": standard_ec
+    }
+
+    # Uložení zpět do souboru
+    with open(CALIBRATION_FILE, "w") as file:
+        json.dump(data, file, indent=4)
+    print("Kalibrace EC senzoru uložena:", data["ec"])
+
+def load_calibration_ec():
+    """ Načtení kalibrace EC senzoru z JSON souboru. """
+    try:
+        with open(CALIBRATION_FILE, "r") as file:
+            data = json.load(file)
+            return data.get("ec", {})
+    except FileNotFoundError:
+        print("Kalibrační soubor neexistuje.")
+        return {}
 
 def initialize_sensors():
     """Inicializace EC senzoru."""
@@ -50,6 +84,7 @@ def calibrate_ec():
         
         # Kalibrace senzoru
         ec_sensor.calibration(voltage, standard_ec)
+        save_calibration_ec(voltage, standard_ec)
         print("Kalibrace dokončena.")
 
     except Exception as e:
@@ -80,7 +115,9 @@ def read_ec():
         
         # Výstup
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] Temperature: {temperature:.1f} °C, EC: {ec_value:.2f} ms/cm a EC: {ec_value * 1000:.0f} uS/cm")
+        # print(f"[{timestamp}] Temperature: {temperature:.1f} °C, EC: {ec_value:.2f} ms/cm ")
+        print(f"[{timestamp}] Temperature: {temperature:.1f} °C, EC: {ec_value:.4f} ms/cm a EC: {ec_value * 1000:.0f} uS/cm")
+    
     
     except Exception as e:
         print(f"Error while reading EC: {e}")
